@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工业蒸汽量预测分析平台</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-light: #e8f0fe;
+            --success: #34a853;
+            --warning: #fbbc04;
+            --danger: #ea4335;
+            --bg: #f5f7fa;
+            --card-bg: #ffffff;
+            --text: #202124;
+            --text-secondary: #5f6368;
+            --border: #dadce0;
+            --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+            --shadow-lg: 0 4px 12px rgba(0,0,0,.10);
+            --radius: 8px;
+            --radius-sm: 6px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+            color: #fff;
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,.15);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        .header .status { font-size: 12px; display: flex; align-items: center; gap: 8px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+        .nav-tabs {
+            display: flex; gap: 4px; margin-bottom: 20px;
+            background: var(--card-bg); border-radius: var(--radius);
+            padding: 4px; box-shadow: var(--shadow);
+        }
+        .nav-tab {
+            flex: 1; padding: 10px 16px; text-align: center; cursor: pointer;
+            border-radius: 6px; font-size: 14px; font-weight: 500;
+            color: var(--text-secondary); transition: 0.2s ease;
+            border: none; background: none; white-space: nowrap;
+        }
+        .nav-tab:hover { background: var(--primary-light); color: var(--primary); }
+        .nav-tab.active { background: var(--primary); color: #fff; }
+        .nav-tab .icon { font-size: 16px; margin-right: 4px; }
+        .panel { display: none; animation: fadeIn 0.3s ease; }
+        .panel.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 16px; overflow: hidden; }
+        .card-header {
+            padding: 14px 20px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            font-weight: 600; font-size: 15px;
+        }
+        .card-body { padding: 20px; }
+        .card-body.no-padding { padding: 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .stat-card { background: var(--card-bg); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); border-left: 3px solid var(--primary); }
+        .stat-card .stat-value { font-size: 24px; font-weight: 700; color: var(--primary); }
+        .stat-card .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .stat-card.success { border-left-color: var(--success); } .stat-card.success .stat-value { color: var(--success); }
+        .stat-card.warning { border-left-color: var(--warning); } .stat-card.warning .stat-value { color: #f9a825; }
+        .stat-card.danger { border-left-color: var(--danger); } .stat-card.danger .stat-value { color: var(--danger); }
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 18px; border-radius: var(--radius-sm);
+            font-size: 14px; font-weight: 500; cursor: pointer;
+            border: none; transition: 0.2s ease; white-space: nowrap;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-primary:disabled { background: #a8c7fa; cursor: not-allowed; }
+        .btn-outline { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+        .btn-outline:hover { background: var(--primary-light); }
+        .btn-lg { padding: 10px 24px; font-size: 15px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+        .form-control {
+            width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+            border-radius: var(--radius-sm); font-size: 14px; background: #fff;
+        }
+        .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,115,232,.15); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .chart-container { position: relative; width: 100%; min-height: 300px; }
+        .chart-container canvas { width: 100% !important; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .data-table th, .data-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        .data-table th { background: #f8f9fa; font-weight: 600; color: var(--text-secondary); position: sticky; top: 0; }
+        .data-table tr:hover { background: #f8f9fa; }
+        .table-scroll { max-height: 360px; overflow-y: auto; }
+        .model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+        .model-check {
+            display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            cursor: pointer; transition: 0.2s ease; font-size: 13px;
+        }
+        .model-check:hover { border-color: var(--primary); background: var(--primary-light); }
+        .model-check.selected { border-color: var(--primary); background: var(--primary-light); }
+        .model-check input { display: none; }
+        .model-color { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+        .result-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 12px; border-radius: var(--radius-sm); margin-bottom: 6px;
+        }
+        .result-row:nth-child(odd) { background: #f8f9fa; }
+        .result-rank {
+            width: 28px; height: 28px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 13px; color: #fff; flex-shrink: 0;
+        }
+        .result-rank.gold { background: linear-gradient(135deg, #f9a825, #f57f17); }
+        .result-rank.silver { background: linear-gradient(135deg, #90a4ae, #607d8b); }
+        .result-rank.bronze { background: linear-gradient(135deg, #bf8040, #8d6e3f); }
+        .result-rank.normal { background: #bdbdbd; }
+        .result-name { flex: 1; margin: 0 12px; font-weight: 500; font-size: 13px; }
+        .result-metrics { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); }
+        .result-metrics span { font-weight: 600; color: var(--text); }
+        .progress-bar { width: 100%; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; margin: 12px 0; }
+        .progress-bar .fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s ease; }
+        .spinner {
+            display: inline-block; width: 20px; height: 20px;
+            border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .toast {
+            position: fixed; top: 68px; right: 24px; padding: 12px 20px;
+            border-radius: var(--radius-sm); color: #fff; font-size: 14px;
+            z-index: 1000; animation: slideIn 0.3s ease; box-shadow: var(--shadow-lg);
+        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.info { background: var(--primary); }
+        .log-area {
+            background: #1e1e1e; color: #d4d4d4;
+            font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+            font-size: 12px; padding: 12px 16px; border-radius: var(--radius-sm);
+            max-height: 200px; overflow-y: auto; line-height: 1.8;
+        }
+        .log-area .log-success { color: #4ec9b0; }
+        .log-area .log-info { color: #569cd6; }
+        .log-area .log-warn { color: #dcdcaa; }
+        .sub-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 16px; }
+        .sub-tab {
+            padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 500;
+            color: var(--text-secondary); border: none; background: none;
+            border-bottom: 2px solid transparent; margin-bottom: -2px; transition: 0.2s ease;
+        }
+        .sub-tab:hover { color: var(--primary); }
+        .sub-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tag {
+            display: inline-flex; align-items: center; padding: 2px 8px;
+            border-radius: 12px; font-size: 11px; font-weight: 500;
+        }
+        .tag-info { background: #e8f0fe; color: #1967d2; }
+        .tag-danger { background: #fce8e6; color: #c5221f; }
+        .highlight-box {
+            background: linear-gradient(135deg, #e8f0fe, #f3e8fd);
+            border: 1px solid #c5cae9; border-radius: var(--radius);
+            padding: 16px 20px; margin-bottom: 16px;
+        }
+        .highlight-box h3 { font-size: 15px; margin-bottom: 8px; color: var(--primary); }
+        .highlight-box p { font-size: 13px; color: var(--text-secondary); }
+        .mt-8 { margin-top: 8px; } .mt-16 { margin-top: 16px; } .mb-16 { margin-bottom: 16px; }
+        .text-muted { color: var(--text-secondary); font-size: 13px; }
+        .font-bold { font-weight: 600; }
+        .flex-center { display: flex; align-items: center; gap: 8px; }
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .nav-tabs { overflow-x: auto; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .model-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>工业蒸汽量预测分析平台</h1>
+    <div class="status"><span class="status-dot"></span>系统就绪</div>
+</div>
+
+<div class="container">
+    <div class="nav-tabs" id="navTabs">
+        <button class="nav-tab active" data-panel="panel-data"><span class="icon">1</span>数据加载与探索</button>
+        <button class="nav-tab" data-panel="panel-feature"><span class="icon">2</span>特征工程</button>
+        <button class="nav-tab" data-panel="panel-train"><span class="icon">3</span>模型训练</button>
+        <button class="nav-tab" data-panel="panel-validate"><span class="icon">4</span>模型验证</button>
+        <button class="nav-tab" data-panel="panel-predict"><span class="icon">5</span>结果预测</button>
+    </div>
+
+    <!-- Panel 1: 数据加载与探索 -->
+    <div class="panel active" id="panel-data">
+        <div class="card">
+            <div class="card-header">数据加载</div>
+            <div class="card-body">
+                <div class="flex-center mb-16">
+                    <button class="btn btn-primary btn-lg" onclick="loadData()" id="btnLoadData">加载默认数据集</button>
+                    <span class="text-muted">加载训练集 zhengqi_train.txt 和测试集 zhengqi_test.txt</span>
+                </div>
+                <div id="dataOverview" style="display:none"><div class="stats-grid" id="overviewStats"></div></div>
+            </div>
+        </div>
+        <div class="card" id="cardPreview" style="display:none">
+            <div class="card-header">数据预览 <span class="text-muted">(前10行)</span></div>
+            <div class="card-body no-padding"><div class="table-scroll" id="dataPreview"></div></div>
+        </div>
+        <div class="grid-2" id="gridDist" style="display:none">
+            <div class="card">
+                <div class="card-header">特征分布对比 (训练集 vs 测试集)</div>
+                <div class="card-body">
+                    <div class="form-group"><select class="form-control" id="featureSelect" onchange="updateDistribution()"></select></div>
+                    <div class="chart-container"><canvas id="chartDistribution"></canvas></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">目标变量分布概览</div>
+                <div class="card-body"><div class="chart-container"><canvas id="chartTargetDist"></canvas></div></div>
+            </div>
+        </div>
+        <div class="card" id="cardCorr" style="display:none">
+            <div class="card-header">相关系数矩阵热力图</div>
+            <div class="card-body"><div class="chart-container" style="min-height:500px"><canvas id="chartCorrelation"></canvas></div></div>
+        </div>
+    </div>
+
+    <!-- Panel 2: 特征工程 -->
+    <div class="panel" id="panel-feature">
+        <div class="highlight-box">
+            <h3>特征工程流程</h3>
+            <p>选择特征处理操作，系统将按顺序执行：异常值处理 -> 特征筛选 -> 交叉特征生成 -> 数据缩放 -> PCA降维。处理完成后可对比处理前后的数据变化。</p>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">特征工程配置</div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>数据缩放方法</label>
+                        <select class="form-control" id="feScaleMethod">
+                            <option value="scale">MinMaxScaler 归一化 (0-1)</option>
+                            <option value="standard">StandardScaler 标准化</option>
+                            <option value="none">不进行缩放</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>PCA 降维 (0=不降维, 如输入16或0.9保留90%信息)</label>
+                        <input type="number" class="form-control" id="fePCA" value="0" min="0" max="500" step="0.05">
+                    </div>
+                    <div class="form-group">
+                        <label>相关系数过滤阈值 (0=不过滤)</label>
+                        <input type="number" class="form-control" id="feCorrThreshold" value="0" min="0" max="1" step="0.05">
+                    </div>
+                    <div class="form-group">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="feRemoveOutliers"> 异常值检测与移除 (Ridge回归 + z-score > 3)
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="feCustomFeatures"> 生成自定义交叉特征
+                        </label>
+                    </div>
+                    <button class="btn btn-primary btn-lg" onclick="applyFeatureEngineering()" id="btnFE">执行特征工程</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">处理日志</div>
+                <div class="card-body">
+                    <div class="log-area" id="feLog"><span style="color:#808080">等待执行特征工程...</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="grid-2" id="gridFeCompare" style="display:none">
+            <div class="card"><div class="card-header">处理前 - 数据预览</div><div class="card-body no-padding"><div class="table-scroll" id="feBeforeTable"></div></div></div>
+            <div class="card"><div class="card-header">处理后 - 数据预览</div><div class="card-body no-padding"><div class="table-scroll" id="feAfterTable"></div></div></div>
+        </div>
+        <div class="card" id="cardFeImportance" style="display:none">
+            <div class="card-header">特征重要性 (随机森林)</div>
+            <div class="card-body"><div class="chart-container"><canvas id="chartFeImportance"></canvas></div></div>
+        </div>
+    </div>
+
+    <!-- Panel 3: 模型训练 -->
+    <div class="panel" id="panel-train">
+        <div class="highlight-box">
+            <h3>多模型并行训练</h3>
+            <p>选择需要训练的模型，系统将使用线程池并行训练所有选中的模型，并使用相同的数据划分进行公平比较。</p>
+        </div>
+        <div class="grid-2">
+            <div class="card">
+                <div class="card-header">模型选择</div>
+                <div class="card-body">
+                    <div class="model-grid" id="modelGrid"></div>
+                    <div class="form-group mt-16"><label>测试集比例</label><input type="number" class="form-control" id="trainTestSize" value="0.2" min="0.1" max="0.5" step="0.05"></div>
+                    <div class="form-group"><label>随机种子</label><input type="number" class="form-control" id="trainRandomState" value="42"></div>
+                    <button class="btn btn-primary btn-lg" onclick="trainModels()" id="btnTrain">开始并行训练</button>
+                    <div class="progress-bar mt-16" id="trainProgress" style="display:none"><div class="fill" id="trainProgressFill" style="width:0%"></div></div>
+                    <div id="trainStatus" class="text-muted mt-8"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">训练日志</div>
+                <div class="card-body"><div class="log-area" id="trainLog"><span style="color:#808080">等待开始训练...</span></div></div>
+            </div>
+        </div>
+        <div class="card" id="cardTrainResults" style="display:none">
+            <div class="card-header">模型训练结果排名</div>
+            <div class="card-body"><div id="trainResultsList"></div></div>
+        </div>
+        <div class="grid-2" id="gridTrainCharts" style="display:none">
+            <div class="card"><div class="card-header">模型多指标综合对比 <span class="text-muted">(测试集)</span></div><div class="card-body"><div class="chart-container" style="min-height:380px"><canvas id="chartMultiMetric"></canvas></div></div></div>
+            <div class="card"><div class="card-header">训练集 vs 测试集 RMSE 对比</div><div class="card-body"><div class="chart-container" style="min-height:380px"><canvas id="chartTrainRMSE"></canvas></div></div></div>
+        </div>
+        <div class="grid-2" id="gridTrainCharts2" style="display:none">
+            <div class="card"><div class="card-header">训练集 vs 测试集 R² 对比</div><div class="card-body"><div class="chart-container"><canvas id="chartTrainR2"></canvas></div></div></div>
+        </div>
+    </div>
+
+    <!-- Panel 4: 模型验证 -->
+    <div class="panel" id="panel-validate">
+        <div class="highlight-box">
+            <h3>模型性能验证与对比分析</h3>
+            <p>通过多种评估指标（MAE、MSE、RMSE、R²）和可视化图表，全面对比不同模型的预测性能。</p>
+        </div>
+        <div class="card" id="cardCompareSummary" style="display:none">
+            <div class="card-header">最佳模型</div>
+            <div class="card-body"><div class="stats-grid" id="bestModelStats"></div></div>
+        </div>
+        <div class="grid-2" id="gridValidate" style="display:none">
+            <div class="card">
+                <div class="card-header">模型评估指标综合对比</div>
+                <div class="card-body">
+                    <div class="sub-tabs" id="metricTabs">
+                        <button class="sub-tab active" data-metric="test_rmse">RMSE</button>
+                        <button class="sub-tab" data-metric="test_mae">MAE</button>
+                        <button class="sub-tab" data-metric="test_r2">R²</button>
+                        <button class="sub-tab" data-metric="test_mse">MSE</button>
+                    </div>
+                    <div class="chart-container"><canvas id="chartMetricCompare"></canvas></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">预测值 vs 实际值 (Top 3 Models)</div>
+                <div class="card-body"><div class="chart-container"><canvas id="chartPredVsActual"></canvas></div></div>
+            </div>
+        </div>
+        <div class="card" id="cardCrossVal" style="display:none">
+            <div class="card-header">
+                交叉验证
+                <div style="display:flex;gap:8px">
+                    <select class="form-control" id="cvModel" style="width:180px"></select>
+                    <input type="number" class="form-control" id="cvFolds" value="5" min="2" max="20" style="width:80px">
+                    <button class="btn btn-primary" onclick="runCrossValidation()">执行交叉验证</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="grid-2">
+                    <div class="table-scroll" style="max-height:280px" id="cvTableContainer"></div>
+                    <div class="chart-container"><canvas id="chartCrossVal"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel 5: 结果预测 -->
+    <div class="panel" id="panel-predict">
+        <div class="highlight-box">
+            <h3>蒸汽量预测</h3>
+            <p>选择已训练的模型进行蒸汽量预测。支持单样本预测、批量预测和测试集预测三种模式。</p>
+        </div>
+        <div class="sub-tabs" id="predictTabs">
+            <button class="sub-tab active" data-predict="single">单样本预测</button>
+            <button class="sub-tab" data-predict="batch">批量预测</button>
+            <button class="sub-tab" data-predict="test">测试集预测</button>
+        </div>
+        <div class="grid-2">
+            <div class="card predict-panel" id="predictSingle">
+                <div class="card-header">单样本预测</div>
+                <div class="card-body">
+                    <div class="form-group"><label>选择模型</label><select class="form-control" id="predictModel"></select></div>
+                    <div class="form-group">
+                        <label>输入特征值 (逗号分隔, 共38个特征 V0-V37)</label>
+                        <textarea class="form-control" id="singleValues" rows="3" placeholder="0.566,0.016,-0.143,0.407,..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="predictSingle()">预测</button>
+                    <div id="singleResult" class="mt-16" style="display:none">
+                        <div class="stat-card"><div class="stat-value" id="singlePrediction">--</div><div class="stat-label">预测蒸汽量</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card predict-panel" id="predictBatch" style="display:none">
+                <div class="card-header">批量预测</div>
+                <div class="card-body">
+                    <div class="form-group"><label>选择模型</label><select class="form-control" id="predictBatchModel"></select></div>
+                    <div class="form-group"><label>预测样本数</label><input type="number" class="form-control" id="batchCount" value="20" min="1" max="100"></div>
+                    <button class="btn btn-primary" onclick="predictBatch()">批量预测</button>
+                    <div id="batchResult" class="mt-16" style="display:none"><div class="chart-container"><canvas id="chartBatchResult"></canvas></div></div>
+                </div>
+            </div>
+            <div class="card predict-panel" id="predictTest" style="display:none">
+                <div class="card-header">测试集预测</div>
+                <div class="card-body">
+                    <div class="form-group"><label>选择模型</label><select class="form-control" id="predictTestModel"></select></div>
+                    <button class="btn btn-primary" onclick="predictTestSet()">执行测试集预测</button>
+                    <div id="testResult" class="mt-16" style="display:none">
+                        <div class="chart-container" style="min-height:350px"><canvas id="chartTestResult"></canvas></div>
+                        <div class="stats-grid mt-16" id="testMetrics"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+<script>
+let chartInstances = {};
+let trainResults = null;
+let beforeFeatureData = null;
+
+function showToast(msg, type='info') {
+    const c = document.getElementById('toastContainer');
+    const t = document.createElement('div');
+    t.className = `toast ${type}`; t.textContent = msg; c.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+}
+
+function destroyChart(key) { if (chartInstances[key]) { chartInstances[key].destroy(); delete chartInstances[key]; } }
+
+async function api(url, data={}) {
+    const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+    return await r.json();
+}
+
+async function apiGet(url) {
+    const r = await fetch(url);
+    return await r.json();
+}
+
+// Navigation
+document.querySelectorAll('.nav-tab').forEach(tab => {
+    tab.addEventListener('click', function(){
+        document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+        this.classList.add('active');
+        document.getElementById(this.dataset.panel).classList.add('active');
+    });
+});
+
+// Sub-tab handlers
+document.addEventListener('click', function(e){
+    if (e.target.classList.contains('sub-tab')){
+        e.target.parentElement.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+        e.target.classList.add('active');
+        if (e.target.dataset.metric) updateMetricChart(e.target.dataset.metric);
+        if (e.target.dataset.predict) switchPredict(e.target.dataset.predict);
+    }
+});
+
+function switchPredict(type){
+    document.querySelectorAll('.predict-panel').forEach(p=>p.style.display='none');
+    const p = document.getElementById('predict'+type.charAt(0).toUpperCase()+type.slice(1));
+    if(p) p.style.display='';
+}
+
+// ============ Panel 1: Data ============
+async function loadData(){
+    const btn = document.getElementById('btnLoadData');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 加载中...';
+    try {
+        const resp = await api('/api/load_data', {});
+        if (!resp.success) { showToast(resp.error,'error'); return; }
+        const d = resp.data;
+        document.getElementById('dataOverview').style.display='';
+        document.getElementById('overviewStats').innerHTML = `
+            <div class="stat-card"><div class="stat-value">${d.train_shape[0]}</div><div class="stat-label">训练集样本数</div></div>
+            <div class="stat-card success"><div class="stat-value">${d.test_shape[0]}</div><div class="stat-label">测试集样本数</div></div>
+            <div class="stat-card warning"><div class="stat-value">${d.feature_count}</div><div class="stat-label">特征数量</div></div>
+            <div class="stat-card"><div class="stat-value">${d.has_target?'有':'无'}</div><div class="stat-label">目标变量(target)</div></div>`;
+        showTable('dataPreview', d.train_head);
+        document.getElementById('cardPreview').style.display='';
+        const sel = document.getElementById('featureSelect');
+        sel.innerHTML = d.feature_names.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
+        document.getElementById('gridDist').style.display='';
+        document.getElementById('cardCorr').style.display='';
+        beforeFeatureData = d.train_head;
+        await loadTargetDist();
+        await updateDistribution();
+        await loadCorrelation();
+        showToast('数据加载成功!','success');
+    } catch(e) { showToast('加载失败: '+e.message,'error'); }
+    finally { btn.disabled=false; btn.innerHTML='加载默认数据集'; }
+}
+
+function showTable(elId, data){
+    const el = document.getElementById(elId);
+    if(!data||!data.length){el.innerHTML='<p class="text-muted">无数据</p>';return;}
+    const cols = Object.keys(data[0]).slice(0, 10);
+    let h = '<table class="data-table"><thead><tr>';
+    cols.forEach(c=>{h+=`<th>${c}</th>`;});
+    h+='</tr></thead><tbody>';
+    data.forEach(r=>{h+='<tr>';cols.forEach(c=>{const v=r[c];h+=`<td>${typeof v==='number'?v.toFixed(4):v}</td>`;});h+='</tr>';});
+    h+='</tbody></table>';
+    el.innerHTML = h;
+}
+
+async function updateDistribution(){
+    const idx = parseInt(document.getElementById('featureSelect').value);
+    const resp = await api('/api/data_distribution',{feature_idx:idx});
+    if(!resp.success) return;
+    const d = resp.data;
+    destroyChart('chartDistribution');
+    const ctx = document.getElementById('chartDistribution').getContext('2d');
+    chartInstances['chartDistribution'] = new Chart(ctx, {
+        type:'bar',
+        data:{
+            labels: d.train_hist.bins.slice(0,-1).map(b=>b.toFixed(2)),
+            datasets:[
+                {label:'训练集',data:d.train_hist.counts,backgroundColor:'rgba(26,115,232,0.6)',borderColor:'#1a73e8',borderWidth:1},
+                {label:'测试集',data:d.test_hist.counts,backgroundColor:'rgba(234,67,53,0.4)',borderColor:'#ea4335',borderWidth:1},
+            ]
+        },
+        options:{responsive:true,plugins:{title:{display:true,text:`特征 ${d.feature_name} 分布`}},scales:{x:{ticks:{maxTicksLimit:15}},y:{title:{display:true,text:'密度'}}}}
+    });
+}
+
+async function loadTargetDist(){
+    const resp = await api('/api/data_stats',{});
+    if(!resp.success||!resp.data.target_stats) return;
+    const ts = resp.data.target_stats;
+    destroyChart('chartTargetDist');
+    const ctx = document.getElementById('chartTargetDist').getContext('2d');
+    chartInstances['chartTargetDist'] = new Chart(ctx, {
+        type:'bar',
+        data:{
+            labels:['Min','Mean-Std','Median','Mean+Std','Max'],
+            datasets:[{label:'Target统计',data:[ts.min,ts.mean-ts.std,ts.median,ts.mean+ts.std,ts.max],backgroundColor:'rgba(52,168,83,0.6)',borderColor:'#34a853',borderWidth:2}]
+        },
+        options:{responsive:true,plugins:{title:{display:true,text:'目标变量(target)分布概览'}},scales:{y:{title:{display:true,text:'蒸汽量'}}}}
+    });
+}
+
+async function loadCorrelation(){
+    const resp = await api('/api/correlation_matrix',{});
+    if(!resp.success) return;
+    const d = resp.data;
+    destroyChart('chartCorrelation');
+    const ctx = document.getElementById('chartCorrelation').getContext('2d');
+    const n = d.columns.length;
+    const flatData = [];
+    for(let i=0;i<n;i++) for(let j=0;j<n;j++) flatData.push({x:i,y:j,v:d.corr_values[i][j]});
+    chartInstances['chartCorrelation'] = new Chart(ctx, {
+        type:'matrix',
+        data:{datasets:[{label:'相关系数',data:flatData,backgroundColor(c){const v=c.dataset.data[c.dataIndex].v;return v>0?`rgba(26,115,232,${Math.abs(v)})`:`rgba(234,67,53,${Math.abs(v)})`;},borderWidth:0.5,borderColor:'#fff',width:()=>Math.floor(500/n)-1,height:()=>Math.floor(500/n)-1}]},
+        options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label(c){return `相关系数: ${c.dataset.data[c.dataIndex].v.toFixed(4)}`;}}}},scales:{x:{labels:d.columns,ticks:{font:{size:8},maxRotation:90}},y:{labels:d.columns,ticks:{font:{size:8}}}}}
+    });
+}
+
+// ============ Panel 2: Feature Engineering ============
+async function applyFeatureEngineering(){
+    const btn = document.getElementById('btnFE');
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> 处理中...';
+    const sm = document.getElementById('feScaleMethod').value;
+    const pcaV = parseFloat(document.getElementById('fePCA').value)||0;
+    const corrT = parseFloat(document.getElementById('feCorrThreshold').value)||0;
+    const rmO = document.getElementById('feRemoveOutliers').checked;
+    const custF = document.getElementById('feCustomFeatures').checked;
+    const ops = sm==='none'?[]:[sm];
+    try {
+        const resp = await api('/api/feature_engineering',{operations:ops,pca_components:pcaV>0?pcaV:null,remove_outliers:rmO,corr_threshold:corrT>0?corrT:null,custom_features:custF});
+        if(!resp.success){showToast(resp.error,'error');return;}
+        const d = resp.data;
+        document.getElementById('feLog').innerHTML = d.log.map(l=>`<span class="log-success">[OK]</span> <span class="log-info">${l}</span>`).join('\n');
+        document.getElementById('gridFeCompare').style.display='';
+        showTable('feBeforeTable', beforeFeatureData||[]);
+        showTable('feAfterTable', d.train_head||[]);
+        showToast(`特征工程完成! ${d.train_shape[0]}行 x ${d.feature_count}个特征`,'success');
+        await loadFeatureImportance();
+    }catch(e){showToast('失败: '+e.message,'error');}
+    finally{btn.disabled=false; btn.innerHTML='执行特征工程';}
+}
+
+async function loadFeatureImportance(){
+    try{
+        const resp = await api('/api/feature_importance',{});
+        if(!resp.success) return;
+        const d = resp.data;
+        document.getElementById('cardFeImportance').style.display='';
+        destroyChart('chartFeImportance');
+        const ctx = document.getElementById('chartFeImportance').getContext('2d');
+        chartInstances['chartFeImportance'] = new Chart(ctx, {
+            type:'bar',
+            data:{labels:d.features,datasets:[{label:'特征重要性',data:d.importances,backgroundColor:d.features.map((_,i)=>`hsla(${220-i*8},70%,55%,0.7)`)}]},
+            options:{indexAxis:'y',responsive:true,plugins:{title:{display:true,text:'Top 20 特征重要性 (随机森林)'}},scales:{x:{title:{display:true,text:'重要性'}}}}
+        });
+    }catch(e){}
+}
+
+// ============ Panel 3: Model Training ============
+async function initModelGrid(){
+    const resp = await apiGet('/api/available_models');
+    if(!resp.success) return;
+    const grid = document.getElementById('modelGrid');
+    const defaults = ['RandomForest','LinearRegression','GradientBoosting'];
+    grid.innerHTML = resp.data.map(m=>`
+        <label class="model-check ${defaults.includes(m.id)?'selected':''}">
+            <input type="checkbox" value="${m.id}" ${defaults.includes(m.id)?'checked':''}>
+            <span class="model-color" style="background:${m.color}"></span>${m.name}
+        </label>`).join('');
+    grid.querySelectorAll('.model-check').forEach(ch=>{ch.addEventListener('click',function(e){if(e.target.tagName!=='INPUT'){e.preventDefault();const cb=this.querySelector('input');cb.checked=!cb.checked;this.classList.toggle('selected',cb.checked);}});});
+}
+
+async function trainModels(){
+    const checks = document.querySelectorAll('#modelGrid input:checked');
+    if(checks.length===0){showToast('请至少选择一个模型','error');return;}
+    const models = Array.from(checks).map(c=>c.value);
+    const ts = parseFloat(document.getElementById('trainTestSize').value)||0.2;
+    const rs = parseInt(document.getElementById('trainRandomState').value)||42;
+    const btn = document.getElementById('btnTrain');
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span> 并行训练中...';
+    document.getElementById('trainProgress').style.display='';
+    document.getElementById('trainProgressFill').style.width='30%';
+    document.getElementById('trainStatus').textContent=`正在训练 ${models.length} 个模型...`;
+    const log = document.getElementById('trainLog');
+    log.innerHTML = '<span class="log-info">开始并行训练...</span>\n';
+    models.forEach(m=>{log.innerHTML+=`<span class="log-info">启动: ${m}</span>\n`;});
+    try{
+        const resp = await api('/api/train_models',{models:models,test_size:ts,random_state:rs});
+        document.getElementById('trainProgressFill').style.width='100%';
+        document.getElementById('trainStatus').textContent='训练完成!';
+        if(!resp.success){showToast(resp.error,'error');return;}
+        trainResults = resp.data;
+        log.innerHTML+='<span class="log-success">===== 训练完成 =====</span>\n';
+        displayTrainingResults(trainResults);
+        updateValidatePanel();
+        showToast(`${models.length} 个模型训练完成!`,'success');
+    }catch(e){showToast('训练失败: '+e.message,'error');}
+    finally{
+        btn.disabled=false; btn.innerHTML='开始并行训练';
+        setTimeout(()=>{document.getElementById('trainProgress').style.display='none';},1500);
+    }
+}
+
+function displayTrainingResults(results){
+    document.getElementById('cardTrainResults').style.display='';
+    document.getElementById('gridTrainCharts').style.display='';
+    document.getElementById('gridTrainCharts2').style.display='';
+    const valid = results.filter(r=>!r.error);
+    const list = document.getElementById('trainResultsList');
+    const rc = ['gold','silver','bronze'];
+    list.innerHTML = valid.map((r,i)=>`
+        <div class="result-row">
+            <span class="result-rank ${i<3?rc[i]:'normal'}">${i+1}</span>
+            <span class="result-name">${r.name_cn}</span>
+            <div class="result-metrics">RMSE:<span>${r.test_rmse?.toFixed(4)}</span> MAE:<span>${r.test_mae?.toFixed(4)}</span> R²:<span>${r.test_r2?.toFixed(4)}</span></div>
+        </div>`).join('');
+    drawMultiMetricChart();
+    drawComparisonChart('chartTrainRMSE','rmse','RMSE');
+    drawComparisonChart('chartTrainR2','r2','R²');
+}
+
+function drawMultiMetricChart(){
+    if(!trainResults) return;
+    destroyChart('chartMultiMetric');
+    const valid = trainResults.filter(r=>!r.error);
+    const ctx = document.getElementById('chartMultiMetric').getContext('2d');
+    const labels = valid.map(r=>r.name_cn);
+    const colors = valid.map(r=>r.color);
+    chartInstances['chartMultiMetric'] = new Chart(ctx, {
+        type:'bar',
+        data:{
+            labels: labels,
+            datasets: [
+                {label:'RMSE',data:valid.map(r=>r.test_rmse),backgroundColor:colors.map(c=>c+'AA'),borderColor:colors,borderWidth:1.5,borderRadius:4,yAxisID:'y'},
+                {label:'MAE',data:valid.map(r=>r.test_mae),backgroundColor:colors.map(c=>c+'60'),borderColor:colors,borderWidth:1,borderRadius:4,borderDash:[3,3],yAxisID:'y'},
+                {label:'R²',data:valid.map(r=>r.test_r2),backgroundColor:colors.map(c=>c+'88'),borderColor:colors,borderWidth:1.5,borderRadius:4,yAxisID:'y1'},
+            ]
+        },
+        options:{
+            responsive:true,
+            interaction:{mode:'index',intersect:false},
+            plugins:{
+                title:{display:true,text:'模型性能多指标对比 (测试集)',font:{size:15,weight:'bold'},padding:15},
+                legend:{position:'top',labels:{usePointStyle:true,padding:20}},
+                tooltip:{callbacks:{label(ctx){return ctx.dataset.label+': '+ctx.raw.toFixed(4);}}}
+            },
+            scales:{
+                x:{title:{display:true,text:'模型',font:{size:13}},ticks:{font:{size:11}}},
+                y:{type:'linear',display:true,position:'left',title:{display:true,text:'RMSE / MAE',font:{size:12}},grid:{color:'#e8e8e8'},ticks:{callback:v=>v.toFixed(3)}},
+                y1:{type:'linear',display:true,position:'right',title:{display:true,text:'R²',font:{size:12},color:'#34a853'},grid:{drawOnChartArea:false},min:0,max:1,ticks:{callback:v=>v.toFixed(2),color:'#34a853'}},
+            }
+        }
+    });
+}
+
+function drawComparisonChart(chartId, metric, label){
+    if(!trainResults) return;
+    destroyChart(chartId);
+    const valid = trainResults.filter(r=>!r.error);
+    const ctx = document.getElementById(chartId).getContext('2d');
+    const isLowerBetter = metric.includes('rmse')||metric.includes('mae')||metric.includes('mse');
+    chartInstances[chartId] = new Chart(ctx, {
+        type:'bar',
+        data:{labels:valid.map(r=>r.name_cn),datasets:[
+            {label:'训练集',data:valid.map(r=>r['train_'+metric]),backgroundColor:'rgba(26,115,232,0.55)',borderColor:'#1a73e8',borderWidth:1.5,borderRadius:3},
+            {label:'测试集',data:valid.map(r=>r['test_'+metric]),backgroundColor:'rgba(234,67,53,0.55)',borderColor:'#ea4335',borderWidth:1.5,borderRadius:3},
+        ]},
+        options:{
+            responsive:true,
+            plugins:{
+                title:{display:true,text:`训练集 vs 测试集 ${label} 对比`,font:{size:14,weight:'bold'}},
+                legend:{position:'top',labels:{usePointStyle:true}},
+                tooltip:{callbacks:{label(ctx){return ctx.dataset.label+': '+ctx.raw.toFixed(4);}}}
+            },
+            scales:{
+                x:{ticks:{font:{size:11}}},
+                y:{title:{display:true,text:label,font:{size:12}},grid:{color:'#e8e8e8'},ticks:{callback:v=>v.toFixed(4)}}
+            }
+        }
+    });
+}
+
+// ============ Panel 4: Model Validation ============
+function updateValidatePanel(){
+    if(!trainResults) return;
+    const valid = trainResults.filter(r=>!r.error);
+    if(!valid.length) return;
+    document.getElementById('cardCompareSummary').style.display='';
+    document.getElementById('gridValidate').style.display='';
+    document.getElementById('cardCrossVal').style.display='';
+    const best = valid[0];
+    document.getElementById('bestModelStats').innerHTML = `
+        <div class="stat-card"><div class="stat-value">${best.name_cn}</div><div class="stat-label">最佳模型</div></div>
+        <div class="stat-card success"><div class="stat-value">${best.test_rmse?.toFixed(4)}</div><div class="stat-label">测试集 RMSE</div></div>
+        <div class="stat-card warning"><div class="stat-value">${best.test_r2?.toFixed(4)}</div><div class="stat-label">测试集 R²</div></div>
+        <div class="stat-card"><div class="stat-value">${best.test_mae?.toFixed(4)}</div><div class="stat-label">测试集 MAE</div></div>`;
+    const cvSel = document.getElementById('cvModel');
+    cvSel.innerHTML = valid.map(r=>`<option value="${r.name}">${r.name_cn}</option>`).join('');
+    const predSels = document.querySelectorAll('#predictModel,#predictBatchModel,#predictTestModel');
+    predSels.forEach(s=>{s.innerHTML=valid.map(r=>`<option value="${r.name}">${r.name_cn} (RMSE:${r.test_rmse?.toFixed(4)})</option>`).join('');});
+    updateMetricChart('test_rmse');
+    drawPredVsActual();
+}
+
+function updateMetricChart(metric){
+    if(!trainResults) return;
+    destroyChart('chartMetricCompare');
+    const valid = trainResults.filter(r=>!r.error);
+    const ctx = document.getElementById('chartMetricCompare').getContext('2d');
+    const lm = {test_rmse:'RMSE',test_mae:'MAE',test_r2:'R²',test_mse:'MSE'};
+    const isBetterLower = metric.includes('rmse')||metric.includes('mae')||metric.includes('mse');
+    const values = valid.map(r=>r[metric]);
+    const bestVal = isBetterLower ? Math.min(...values) : Math.max(...values);
+    chartInstances['chartMetricCompare'] = new Chart(ctx, {
+        type:'bar',
+        data:{
+            labels:valid.map(r=>r.name_cn),
+            datasets:[{
+                label:lm[metric]||metric,
+                data:values,
+                backgroundColor:valid.map(r=>{
+                    const v = r[metric];
+                    const isBest = Math.abs(v-bestVal)<1e-8;
+                    return isBest ? r.color : r.color+'66';
+                }),
+                borderColor:valid.map(r=>r.color),
+                borderWidth: valid.map(r=>Math.abs(r[metric]-bestVal)<1e-8?2.5:1),
+                borderRadius:4,
+            }]
+        },
+        options:{
+            responsive:true,
+            plugins:{
+                title:{display:true,text:`模型 ${lm[metric]||metric} 对比`,font:{size:14,weight:'bold'}},
+                legend:{display:false},
+                tooltip:{callbacks:{label(ctx){return (lm[metric]||metric)+': '+ctx.raw.toFixed(4);}}}
+            },
+            scales:{
+                x:{ticks:{font:{size:11}}},
+                y:{title:{display:true,text:lm[metric]||metric,font:{size:12}},grid:{color:'#e8e8e8'},ticks:{callback:v=>v.toFixed(4)}}
+            }
+        }
+    });
+}
+
+function drawPredVsActual(){
+    if(!trainResults) return;
+    destroyChart('chartPredVsActual');
+    const valid = trainResults.filter(r=>!r.error).slice(0,3);
+    const ctx = document.getElementById('chartPredVsActual').getContext('2d');
+    const datasets = valid.map(r=>({label:r.name_cn,data:r.test_predictions?.slice(0,50).map((p,i)=>({x:r.test_actual?.[i]||0,y:p}))||[],backgroundColor:r.color+'88',borderColor:r.color,pointRadius:4,pointHoverRadius:6}));
+    const allA = valid[0]?.test_actual||[];
+    const mn = Math.min(...allA.filter(v=>!isNaN(v)),0);
+    const mx = Math.max(...allA.filter(v=>!isNaN(v)),1);
+    datasets.push({label:'理想线',data:[{x:mn,y:mn},{x:mx,y:mx}],borderColor:'#333',borderDash:[6,3],borderWidth:1.5,pointRadius:0,type:'line'});
+    chartInstances['chartPredVsActual'] = new Chart(ctx, {
+        type:'scatter',
+        data:{datasets},
+        options:{
+            responsive:true,
+            plugins:{
+                title:{display:true,text:'预测值 vs 实际值 (Top 3 Models)',font:{size:14,weight:'bold'}},
+                legend:{position:'bottom',labels:{usePointStyle:true}},
+                tooltip:{callbacks:{label(ctx){return ctx.dataset.label+': ('+ctx.raw.x.toFixed(4)+', '+ctx.raw.y.toFixed(4)+')';}}}
+            },
+            scales:{
+                x:{title:{display:true,text:'实际值',font:{size:12}},grid:{color:'#e8e8e8'}},
+                y:{title:{display:true,text:'预测值',font:{size:12}},grid:{color:'#e8e8e8'}},
+            }
+        }
+    });
+}
+
+async function runCrossValidation(){
+    const model = document.getElementById('cvModel').value;
+    const folds = parseInt(document.getElementById('cvFolds').value)||5;
+    try{
+        const resp = await api('/api/cross_validation',{model:model,n_splits:folds});
+        if(!resp.success){showToast(resp.error,'error');return;}
+        const d = resp.data;
+        let h = '<table class="data-table"><thead><tr><th>Fold</th><th>MAE</th><th>MSE</th><th>RMSE</th><th>R²</th></tr></thead><tbody>';
+        d.fold_results.forEach((r,i)=>{h+=`<tr><td>Fold ${i+1}</td><td>${r.mae.toFixed(4)}</td><td>${r.mse.toFixed(4)}</td><td>${r.rmse.toFixed(4)}</td><td>${r.r2.toFixed(4)}</td></tr>`;});
+        h+=`<tr style="font-weight:700;background:#e8f0fe"><td>平均</td><td>${d.avg_metrics.avg_mae.toFixed(4)}±${d.std_metrics.std_mae.toFixed(4)}</td><td>${d.avg_metrics.avg_mse.toFixed(4)}±${d.std_metrics.std_mse.toFixed(4)}</td><td>${d.avg_metrics.avg_rmse.toFixed(4)}±${d.std_metrics.std_rmse.toFixed(4)}</td><td>${d.avg_metrics.avg_r2.toFixed(4)}±${d.std_metrics.std_r2.toFixed(4)}</td></tr></tbody></table>`;
+        document.getElementById('cvTableContainer').innerHTML = h;
+        destroyChart('chartCrossVal');
+        const ctx = document.getElementById('chartCrossVal').getContext('2d');
+        chartInstances['chartCrossVal'] = new Chart(ctx, {
+            type:'line',
+            data:{labels:d.fold_results.map((_,i)=>`Fold ${i+1}`),datasets:[
+                {label:'RMSE',data:d.fold_results.map(r=>r.rmse),borderColor:'#ea4335',backgroundColor:'rgba(234,67,53,0.1)',fill:true,tension:0.3},
+                {label:'MAE',data:d.fold_results.map(r=>r.mae),borderColor:'#1a73e8',backgroundColor:'rgba(26,115,232,0.1)',fill:true,tension:0.3},
+                {label:'R²',data:d.fold_results.map(r=>r.r2),borderColor:'#34a853',backgroundColor:'rgba(52,168,83,0.1)',fill:true,tension:0.3},
+            ]},
+            options:{responsive:true,plugins:{title:{display:true,text:`${folds}折交叉验证`}},scales:{y:{title:{display:true,text:'指标值'}}}}
+        });
+        showToast(`${folds}折交叉验证完成!`,'success');
+    }catch(e){showToast('失败: '+e.message,'error');}
+}
+
+// ============ Panel 5: Prediction ============
+async function predictSingle(){
+    const model = document.getElementById('predictModel').value;
+    const vs = document.getElementById('singleValues').value.trim();
+    if(!vs){showToast('请输入特征值','error');return;}
+    const vals = vs.split(',').map(v=>parseFloat(v.trim()));
+    if(vals.some(isNaN)){showToast('特征值格式不正确','error');return;}
+    try{
+        const resp = await api('/api/predict',{model:model,type:'single',values:vals});
+        if(!resp.success){showToast(resp.error,'error');return;}
+        document.getElementById('singleResult').style.display='';
+        document.getElementById('singlePrediction').textContent = resp.data.prediction.toFixed(6);
+        showToast('预测完成!','success');
+    }catch(e){showToast('失败: '+e.message,'error');}
+}
+
+async function predictBatch(){
+    const model = document.getElementById('predictBatchModel').value;
+    const count = parseInt(document.getElementById('batchCount').value)||20;
+    try{
+        const resp = await api('/api/predict',{model:model,type:'test'});
+        if(!resp.success){showToast(resp.error,'error');return;}
+        const d = resp.data;
+        document.getElementById('batchResult').style.display='';
+        destroyChart('chartBatchResult');
+        const ctx = document.getElementById('chartBatchResult').getContext('2d');
+        const n = Math.min(count, d.predictions.length);
+        const indices = Array.from({length:n},(_,i)=>i+1);
+        const datasets = [];
+        if(d.actual&&d.actual.length) datasets.push({label:'实际值',data:d.actual.slice(0,n),borderColor:'#ea4335',backgroundColor:'rgba(234,67,53,0.1)',fill:true,tension:0.3});
+        datasets.push({label:'预测值',data:d.predictions.slice(0,n),borderColor:'#1a73e8',backgroundColor:'rgba(26,115,232,0.1)',fill:true,tension:0.3});
+        chartInstances['chartBatchResult'] = new Chart(ctx, {type:'line',data:{labels:indices,datasets},options:{responsive:true,plugins:{title:{display:true,text:`批量预测 (前${n}个)`}},scales:{x:{title:{display:true,text:'样本编号'}},y:{title:{display:true,text:'蒸汽量'}}}}});
+        showToast(`预测完成! 共${d.count}个样本`,'success');
+    }catch(e){showToast('失败: '+e.message,'error');}
+}
+
+async function predictTestSet(){
+    const model = document.getElementById('predictTestModel').value;
+    try{
+        const resp = await api('/api/predict',{model:model,type:'test'});
+        if(!resp.success){showToast(resp.error,'error');return;}
+        const d = resp.data;
+        document.getElementById('testResult').style.display='';
+        destroyChart('chartTestResult');
+        const ctx = document.getElementById('chartTestResult').getContext('2d');
+        const n = Math.min(100, d.predictions.length);
+        const indices = Array.from({length:n},(_,i)=>i+1);
+        const datasets = [];
+        if(d.actual && d.actual.length){
+            datasets.push({
+                label:'实际值',
+                data:d.actual.slice(0,n).map((v,i)=>({x:i+1,y:v})),
+                borderColor:'#ea4335',
+                backgroundColor:'rgba(234,67,53,0.7)',
+                pointRadius:4,
+                pointHoverRadius:6,
+                showLine:true,
+                borderDash:[8,4],
+                borderWidth:2,
+                tension:0.2,
+                fill:false,
+                order:1
+            });
+        }
+        datasets.push({
+            label:'预测值',
+            data:d.predictions.slice(0,n).map((v,i)=>({x:i+1,y:v})),
+            borderColor:'#1a73e8',
+            backgroundColor:'rgba(26,115,232,0.7)',
+            pointRadius:4,
+            pointHoverRadius:6,
+            showLine:true,
+            borderWidth:2.5,
+            tension:0.2,
+            fill:false,
+            order:0
+        });
+        chartInstances['chartTestResult'] = new Chart(ctx, {
+            type:'scatter',
+            data:{datasets},
+            options:{
+                responsive:true,
+                plugins:{
+                    title:{display:true,text:'测试集预测散点图',font:{size:15}},
+                    legend:{position:'top',labels:{usePointStyle:true,padding:20}}
+                },
+                scales:{
+                    x:{title:{display:true,text:'样本编号'}},
+                    y:{title:{display:true,text:'蒸汽量'}}
+                }
+            }
+        });
+        document.getElementById('testMetrics').innerHTML = d.rmse?`
+            <div class="stat-card danger"><div class="stat-value">${d.rmse.toFixed(4)}</div><div class="stat-label">RMSE</div></div>
+            <div class="stat-card warning"><div class="stat-value">${d.mae.toFixed(4)}</div><div class="stat-label">MAE</div></div>
+            <div class="stat-card success"><div class="stat-value">${d.r2.toFixed(4)}</div><div class="stat-label">R²</div></div>`:'';
+        showToast('测试集预测完成!','success');
+    }catch(e){showToast('失败: '+e.message,'error');}
+}
+
+// Initialize
+initModelGrid();
+
+// Pre-load data on page load
+window.addEventListener('load', function(){
+    // Auto-load data for better UX
+    setTimeout(loadData, 500);
+});
+</script>
+</body>
+</html>
